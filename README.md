@@ -6,9 +6,9 @@ txThings - CoAP library for Twisted framework
 txThings is a Python implementation of Constrained
 Application Protocol (CoAP):
 
-http://tools.ietf.org/html/draft-ietf-core-coap-18
+http://tools.ietf.org/html/rfc7252
 
- 
+
 txThings is based on Twisted - asynchronous I/O
 framework and networking engine written in Python.
 

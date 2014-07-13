@@ -74,6 +74,8 @@ class SeparateLargeResource(resource.CoAPResource):
     later. Sending empty ACK happens automatically after coap.EMPTY_ACK_DELAY.
     No special instructions are necessary.
 
+    Notice: txThings sends empty ACK automatically if response takes too long.
+
     Method render_GET returns a deferred. This allows the protocol to
     do other things, while the answer is prepared.
 
