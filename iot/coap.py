@@ -134,7 +134,7 @@ NOT_ACCEPTABLE = 134
 REQUEST_ENTITY_INCOMPLETE = 136
 PRECONDITION_FAILED = 140
 REQUEST_ENTITY_TOO_LARGE = 141
-UNSUPPORTED_MEDIA_TYPE = 143
+UNSUPPORTED_CONTENT_FORMAT = 143
 INTERNAL_SERVER_ERROR = 160
 NOT_IMPLEMENTED = 161
 BAD_GATEWAY = 162
@@ -165,7 +165,7 @@ responses = {65: '2.01 Created',
              136: '4.08 Request Entity Incomplete',
              140: '4.12 Precondition Failed',
              141: '4.13 Request Entity Too Large',
-             143: '4.15 Unsupported Media Type',
+             143: '4.15 Unsupported Content-Format',
              160: '5.00 Internal Server Error',
              161: '5.01 Not Implemented',
              162: '5.02 Bad Gateway',
@@ -585,6 +585,24 @@ class Options(object):
 
     accept = property(_getAccept, _setAccept)
 
+    def _setLocationPath(self, segments):
+        """Convenience setter: Location-Path option"""
+        if isinstance(segments, basestring): #For Python >3.1 replace with isinstance(segments,str)
+            raise ValueError("Location Path should be passed as a list or tuple of segments")
+        self.deleteOption(number=LOCATION_PATH)
+        for segment in segments:
+            self.addOption(StringOption(number=LOCATION_PATH, value=str(segment)))
+
+    def _getLocationPath(self):
+        """Convenience getter: Location-Path option"""
+        segment_list = []
+        location_path = self.getOption(number=LOCATION_PATH)
+        if location_path is not None:
+            for segment in location_path:
+                segment_list.append(segment.value)
+        return segment_list
+
+    location_path = property(_getLocationPath, _setLocationPath)
 
 def readExtendedFieldValue(value, rawdata):
     """Used to decode large values of option delta and option length
