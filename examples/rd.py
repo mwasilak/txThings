@@ -13,13 +13,9 @@ Created on 25-08-2014
 
 @author: Maciej Wasilak
 """
-import struct
-import random
-import copy
+
 import sys
 import fnmatch
-
-import link_header
 
 from twisted.internet import defer
 from twisted.internet.protocol import DatagramProtocol
@@ -28,6 +24,10 @@ from twisted.python import log
 
 import txthings.coap as coap
 import txthings.resource as resource
+import txthings.ext.link_header as link_header
+
+
+DEFAULT_LIFETIME = 86400
 
 def parseUriQuery(query_list):
     query_dict = {}
@@ -81,7 +81,7 @@ class DirectoryResource (resource.CoAPResource):
         link_format = link_header.parse_link_value(request.payload)
         domain = params.get('d', '')
         endpoint_type = params.get('et', '')
-        lifetime = params.get('lt', 86400)
+        lifetime = params.get('lt', DEFAULT_LIFETIME)
         context = params.get('con', 'coap://'+request.remote[0]+":"+str(request.remote[1]))
 
         entry = DirectoryEntryResource(self, link_format, endpoint, domain, endpoint_type, lifetime, context)
@@ -122,7 +122,7 @@ class DirectoryEntryResource (resource.CoAPResource):
             response = coap.Message(code=coap.BAD_REQUEST, payload="Bad or ambiguous query options!")
             return defer.succeed(response)
 
-        lifetime = params.get('lt', 86400)
+        lifetime = params.get('lt', DEFAULT_LIFETIME)
         self.timeout.cancel()
         self.timeout = reactor.callLater(float(lifetime), self.removeResource)
         self.endpoint_type = params.get('et', '')
@@ -283,5 +283,5 @@ lookup.putChild('res', res_lookup)
 endpoint = resource.Endpoint(root)
 protocol = coap.Coap(endpoint)
 
-reactor.listenUDP(61616, protocol)
+reactor.listenUDP(coap.COAP_PORT, protocol)
 reactor.run()
