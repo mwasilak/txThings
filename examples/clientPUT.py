@@ -13,8 +13,8 @@ from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
 from twisted.python import log
 
-import iot.coap as coap
-import iot.resource as resource
+import txthings.coap as coap
+import txthings.resource as resource
 
 
 class Agent():

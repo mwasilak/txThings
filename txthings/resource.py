@@ -11,8 +11,8 @@ import warnings
 
 from zope.interface import Attribute, implements, Interface
 
-import iot.error
-import iot.coap as coap
+import error
+import coap
 from itertools import chain
 from twisted.python import log
 from twisted.python.reflect import prefixedMethodNames
@@ -114,7 +114,7 @@ class CoAPResource:
         @param request: a twisted.web.server.Request specifying meta-information
                         about the request that is being made for this child.
         """
-        raise iot.error.NoResource
+        raise error.NoResource
 
     def getChildWithDefault(self, path, request):
         """
@@ -163,10 +163,10 @@ class CoAPResource:
         to return a string or NOT_DONE_YET.
         """
         if request.code not in coap.requests:
-            raise iot.error.UnsupportedMethod()
+            raise error.UnsupportedMethod()
         m = getattr(self, 'render_' + coap.requests[request.code], None)
         if not m:
-            raise iot.error.UnallowedMethod()
+            raise error.UnallowedMethod()
         return m(request)
 
     def addParam(self, param):

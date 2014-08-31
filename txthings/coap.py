@@ -11,7 +11,7 @@ from itertools import chain
 
 from twisted.internet import protocol, defer, reactor
 from twisted.python import log, failure
-import iot.error
+import error
 
 
 COAP_PORT = 5683
@@ -337,7 +337,7 @@ class Message(object):
                 self.mid = next_block.mid
                 self.response_type = None
             else:
-                raise iot.error.NotImplemented()
+                raise error.NotImplemented()
         else:
             raise ValueError("Fatal Error: called appendRequestBlock on non-request message!!!")
 
@@ -348,10 +348,10 @@ class Message(object):
             ## @TODO: check etags for consistency
             block2 = next_block.opt.block2
             if block2.block_number * (2 ** (block2.size_exponent + 4)) != len(self.payload):
-                raise iot.error.NotImplemented()
+                raise error.NotImplemented()
 
             if next_block.opt.etag != self.opt.etag:
-                raise iot.error.ResourceChanged()
+                raise error.ResourceChanged()
 
             self.payload += next_block.payload
             self.opt.block2 = block2
@@ -974,7 +974,7 @@ class Requester(object):
 
             log.msg("Request timed out")
             del self.protocol.outgoing_requests[(request.token, request.remote)]
-            d.errback(iot.error.RequestTimedOut())
+            d.errback(error.RequestTimedOut())
 
         def gotResult(result):
             if timeout.active():
@@ -1070,7 +1070,7 @@ class Requester(object):
             if self.assembled_response is not None:
                 try:
                     self.assembled_response.appendResponseBlock(response)
-                except iot.error.Error as e:
+                except error.Error as e:
                     return defer.fail(e)
             else:
                 if block2.block_number is 0:
@@ -1096,7 +1096,7 @@ class Requester(object):
             if self.assembled_response is None:
                 return defer.succeed(response)
             else:
-                return defer.fail(iot.error.MissingBlock2Option)
+                return defer.fail(error.MissingBlock2Option)
 
     def askForNextResponseBlock(self, result, request):
         """Helper method used to ask server to send next response block."""
@@ -1142,10 +1142,10 @@ class Responder(object):
             else:
                 try:
                     self.assembled_request.appendRequestBlock(request)
-                except (iot.error.NotImplemented, AttributeError):
+                except (error.NotImplemented, AttributeError):
                     self.respondWithError(request, NOT_IMPLEMENTED, "Error: Request block received out of order!")
-                    return defer.fail(iot.error.NotImplemented())
-                    #raise iot.error.NotImplemented
+                    return defer.fail(error.NotImplemented())
+                    #raise error.NotImplemented
             if block1.more is True:
                 #TODO: SUCCES_CODE Code should be either Changed or Created - Resource check needed
                 #TODO: SIZE_CHECK1 should check if the size of incoming payload is still acceptable
@@ -1177,11 +1177,11 @@ class Responder(object):
         try:
             resource = self.protocol.endpoint.getResourceFor(request)
             d = resource.render(request)
-        except iot.error.NoResource:
+        except error.NoResource:
             self.respondWithError(request, NOT_FOUND, "Error: Resource not found!")
-        except iot.error.UnallowedMethod:
+        except error.UnallowedMethod:
             self.respondWithError(request, METHOD_NOT_ALLOWED, "Error: Method not allowed!")
-        except iot.error.UnsupportedMethod:
+        except error.UnsupportedMethod:
             self.respondWithError(request, METHOD_NOT_ALLOWED, "Error: Method not recognized!")
         else:
             delayed_ack = reactor.callLater(EMPTY_ACK_DELAY, self.sendEmptyAck, request)
@@ -1196,7 +1196,7 @@ class Responder(object):
            - NotImplemented - requests which are send non-sequentially
            - WaitingForClientTimedOut - requests timed out
         """
-        err.trap(iot.error.NotImplemented, iot.error.WaitingForClientTimedOut)
+        err.trap(error.NotImplemented, error.WaitingForClientTimedOut)
 
     def respondWithError(self, request, code, payload):
         """Helper method to send error response to client."""
@@ -1290,7 +1290,7 @@ class Responder(object):
         """Handle (silently ignore) request errors related
            to Block2. Currently it's used only to ignore
            when client doesn't request next block for a long time"""
-        err.trap(iot.error.WaitingForClientTimedOut)
+        err.trap(error.WaitingForClientTimedOut)
 
     def sendNonFinalResponse(self, response, request):
         """Helper method to send, a response to client, and setup
@@ -1305,7 +1305,7 @@ class Responder(object):
 
             log.msg("Waiting for next blockwise request timed out")
             self.protocol.incoming_requests.pop((uriPathAsString(request.opt.uri_path), request.remote))
-            d.errback(iot.error.WaitingForClientTimedOut())
+            d.errback(error.WaitingForClientTimedOut())
 
         def gotResult(result):
             if timeout.active():
