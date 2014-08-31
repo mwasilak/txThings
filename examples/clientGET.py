@@ -3,11 +3,8 @@ Created on 08-09-2012
 
 @author: Maciej Wasilak
 '''
-import struct
-import random
-import copy
-import sys
 
+import sys
 
 from twisted.internet.defer import Deferred
 from twisted.internet.protocol import DatagramProtocol
@@ -20,9 +17,11 @@ import txthings.resource as resource
 
 class Agent():
     """
-    Example class which performs single GET request to localhost
-    port 5683 (official IANA assigned CoAP port), URI "/other/separate".
-    Request is sent 2 seconds after initialization.
+    Example class which performs single GET request to iot.eclipse.org
+    port 5683 (official IANA assigned CoAP port), URI "obs".
+    Request is sent 1 second after initialization.
+    
+    Remote IP address is hardcoded - no DNS lookup is preformed.
 
     Method requestResource constructs the request message to
     remote endpoint. Then it sends the message using protocol.request().
@@ -36,24 +35,24 @@ class Agent():
 
     def __init__(self, protocol):
         self.protocol = protocol
-        reactor.callLater(2, self.requestResource)
+        reactor.callLater(1, self.requestResource)
 
     def requestResource(self):
         request = coap.Message(code=coap.GET)
-        #request.opt.uri_path = ('other', 'separate')
-        request.opt.uri_path = ('time',)
-        request.remote = ("127.0.0.1", coap.COAP_PORT)
-        request.setObserve(self.printLaterResponse)
-        d = protocol.request(request)
+        #Send request to "coap://iot.eclipse.org:5683/obs"
+        request.opt.uri_path = ('obs',)
+        request.opt.observe = 0
+        request.remote = ("198.41.30.241", coap.COAP_PORT)
+        d = protocol.request(request, observeCallback=self.printLaterResponse)
         d.addCallback(self.printResponse)
         d.addErrback(self.noResponse)
 
     def printResponse(self, response):
-        print 'Result: ' + response.payload
+        print 'First result: ' + response.payload
         #reactor.stop()
 
     def printLaterResponse(self, response):
-        print 'Newer result: ' + response.payload
+        print 'Observe result: ' + response.payload
 
     def noResponse(self, failure):
         print 'Failed to fetch resource:'
