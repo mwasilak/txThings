@@ -3,9 +3,7 @@ Created on 08-09-2012
 
 @author: Maciej Wasilak
 '''
-import struct
-import random
-import copy
+
 import sys
 import datetime
 
@@ -95,7 +93,7 @@ class SeparateLargeResource(resource.CoAPResource):
         return d
 
     def responseReady(self, d, request):
-        print 'response ready. sending...'
+        log.msg('response ready. sending...')
         payload = "Three rings for the elven kings under the sky, seven rings for dwarven lords in their halls of stone, nine rings for mortal men doomed to die, one ring for the dark lord on his dark throne."
         response = coap.Message(code=coap.CONTENT, payload=payload)
         d.callback(response)
@@ -109,7 +107,7 @@ class TimeResource(resource.CoAPResource):
         self.notify()
 
     def notify(self):
-        print "i'm trying to send notifications"
+        log.msg('TimeResource: trying to send notifications')
         self.updatedState()
         reactor.callLater(60, self.notify)
 
@@ -143,7 +141,7 @@ class CoreResource(resource.CoAPResource):
         payload = ",".join(data)
         print payload
         response = coap.Message(code=coap.CONTENT, payload=payload)
-        response.opt.content_format = 40
+        response.opt.content_format = coap.media_types_rev['application/link-format']
         return defer.succeed(response)
 
 # Resource tree creation
