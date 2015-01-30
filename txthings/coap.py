@@ -95,6 +95,9 @@ REQUEST_TIMEOUT = MAX_TRANSMIT_WAIT
    (for example 10 seconds)
    For M2M it's application dependent."""
 
+PROXYING_SUPPORT = True
+"""Turn forward proxy on/off."""
+
 CON = 0
 """Confirmable message type."""
 
@@ -604,6 +607,52 @@ class Options(object):
 
     location_path = property(_getLocationPath, _setLocationPath)
 
+    def _setProxyScheme(self, proxy_scheme):
+        """Convenience setter: Proxy-Scheme option"""
+        if len(proxy_scheme) < 1 or len(proxy_scheme) > 255:
+            raise ValueError("Invalid length of Proxy-Scheme option")
+        self.deleteOption(number=PROXY_SCHEME)
+        self.addOption(StringOption(number=PROXY_SCHEME, value=str(proxy_scheme)))
+
+    def _getProxyScheme(self):
+        """Convenience getter: Proxy-Scheme option"""
+
+        proxy_scheme = self.getOption(number=PROXY_SCHEME)
+        if proxy_scheme is not None:
+            return proxy_scheme[0].value
+
+    proxy_scheme = property(_getProxyScheme, _setProxyScheme)
+
+    def _setUriHost(self, uri_host):
+        """Convenience setter: Uri-Host option"""
+        if len(uri_host) < 1 or len(uri_host) > 255:
+            raise ValueError("Invalid length of Uri-Host option")
+        self.deleteOption(number=URI_HOST)
+        self.addOption(StringOption(number=URI_HOST, value=str(uri_host)))
+
+    def _getUriHost(self):
+        """Convenience getter: Uri-Host option"""
+
+        uri_host = self.getOption(number=URI_HOST)
+        if uri_host is not None:
+            return uri_host[0].value
+
+    uri_host = property(_getUriHost, _setUriHost)
+
+    def _setUriPort(self, uri_port):
+        self.deleteOption(number=URI_PORT)
+        if uri_port is not None:
+            self.addOption(UintOption(number=URI_PORT, value=uri_port))
+
+    def _getUriPort(self):
+        uri_port = self.getOption(number=URI_PORT)
+        if uri_port is not None:
+            return uri_port[0].value
+        else:
+            return None
+
+    uri_port = property(_getUriPort, _setUriPort)
+
 def readExtendedFieldValue(value, rawdata):
     """Used to decode large values of option delta and option length
        from raw binary form."""
@@ -918,8 +967,7 @@ class Coap(protocol.DatagramProtocol):
            This is a method that should be called by user app."""
         return Requester(self, request, observeCallback, block1Callback, block2Callback,
                          observeCallbackArgs, block1CallbackArgs, block2CallbackArgs,
-                         observeCallbackKeywords, block1CallbackKeywords, block2CallbackKeywords).deferred
-
+                         observeCallbackKeywords, block1CallbackKeywords, block2CallbackKeywords).fullRequest()
 
 class Requester(object):
     """Class used to handle single outgoing request.
@@ -928,9 +976,9 @@ class Requester(object):
        outgoing blockwise requests and receiving incoming
        blockwise responses."""
 
-    def __init__(self, protocol, app_request, observeCallback, block1Callback, block2Callback,
-                       observeCallbackArgs, block1CallbackArgs, block2CallbackArgs,
-                       observeCallbackKeywords, block1CallbackKeywords, block2CallbackKeywords):
+    def __init__(self, protocol, app_request, observeCallback=None, block1Callback=None, block2Callback=None,
+                       observeCallbackArgs=None, block1CallbackArgs=None, block2CallbackArgs=None,
+                       observeCallbackKeywords=None, block1CallbackKeywords=None, block2CallbackKeywords=None):
         self.protocol = protocol
         self.app_request = app_request
         self.assembled_response = None
@@ -942,6 +990,8 @@ class Requester(object):
                     (block2Callback, block2CallbackArgs, block2CallbackKeywords))
         if isRequest(self.app_request.code) is False:
             raise ValueError("Message code is not valid for request")
+
+    def fullRequest(self):
         size_exp = DEFAULT_BLOCK_SIZE_EXP
         if len(self.app_request.payload) > (2 ** (size_exp + 4)):
             request = self.app_request.extractBlock(0, size_exp)
@@ -953,6 +1003,11 @@ class Requester(object):
         self.deferred = self.sendRequest(request)
         self.deferred.addCallback(self.processBlock1InResponse)
         self.deferred.addCallback(self.processBlock2InResponse)
+        return self.deferred
+
+    def basicRequest(self):
+        self.deferred = self.sendRequest(self.app_request)
+        return self.deferred
 
     def sendRequest(self, request):
         """Send a request or single request block.
@@ -1122,9 +1177,42 @@ class Responder(object):
         self.assembled_request = None
         self.app_response = None
         log.msg("Request doesn't pertain to earlier blockwise requests.")
-        self.deferred = self.processBlock1InRequest(request)
-        self.deferred.addErrback(self.handleBlock1RequestErrors)
-        self.deferred.addCallback(self.dispatchRequest)
+        if request.opt.proxy_scheme is not None:
+            self.processProxyInRequest(request)
+        else:
+            log.msg("Non-proxy request.")
+            self.deferred = self.processBlock1InRequest(request)
+            self.deferred.addErrback(self.handleBlock1RequestErrors)
+            self.deferred.addCallback(self.dispatchRequest)
+
+    def processProxyInRequest(self, request):
+        """Process incoming request with regard to Proxy-Scheme and Proxy-Uri option."""
+
+        if PROXYING_SUPPORT is not True:
+            self.respondWithError(request, PROXYING_NOT_SUPPORTED, "Error: Proxying is not supported!")
+            return
+        elif request.opt.proxy_scheme != "coap":
+            print request.opt.proxy_scheme
+            self.respondWithError(request, PROXYING_NOT_SUPPORTED, "Error: Proxy scheme not supported!")
+            return
+        else:
+            #TODO: check for unsafe unrecognized options
+            #TODO: check if Uri-host and port points to proxy itself
+            forwarded_request = copy.deepcopy(request)
+            request.mid = None
+            forwarded_request.remote = (request.opt.uri_host, request.opt.uri_port)
+            forwarded_request.opt.deleteOption(number=PROXY_SCHEME)
+            forwarded_request.opt.deleteOption(number=URI_HOST)
+            forwarded_request.opt.deleteOption(number=URI_PORT)
+            d = Requester(self.protocol,forwarded_request).basicRequest()
+            d.addCallback(self.handleProxyResponse, request)
+            #d.addErrback(self.proxyResponseError, request)
+
+    def handleProxyResponse(self, response, request):
+        self.sendResponse(response, request)
+
+    def proxyResponseError(self, failure, request):
+        self.respondWithError(request, GATEWAY_TIMEOUT, "Error: Proxy request failed")        
 
     def processBlock1InRequest(self, request):
         """Process incoming request with regard to Block1 option.
