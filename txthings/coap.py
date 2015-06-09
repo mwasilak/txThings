@@ -743,7 +743,7 @@ class Coap(protocol.DatagramProtocol):
         self.observations = {} # outgoing observations. (token, remote) -> callback
 
     def datagramReceived(self, data, (host, port)):
-        log.msg("received %r from %s:%d" % (data, host, port))
+        log.msg("Received %r from %s:%d" % (data, host, port))
         message = Message.decode(data, (host, port), self)
         if self.deduplicateMessage(message) is True:
             return
@@ -1335,7 +1335,7 @@ class Responder(object):
         #if isResponse(response.code) is False:
             #raise ValueError("Message code is not valid for a response.")
         response.token = request.token
-        print "Token: %s" % (response.token)
+        log.msg("Token: %s" % ":".join("{:02x}".format(ord(c)) for c in response.token))
         response.remote = request.remote
         if request.opt.block1 is not None:
             response.opt.block1 = request.opt.block1
@@ -1374,7 +1374,7 @@ class Observation(object):
 
     def trigger(self):
         # bypassing parsing and duplicate detection, pretend the request came in again
-        print "triggering retransmission with original request %r (will set response_type to ACK)"%vars(self.original_request)
+        log.msg("Triggering retransmission with original request %r (will set response_type to ACK)" % vars(self.original_request))
         self.original_request.response_type = ACK # trick responder into sending CON
         Responder(self.original_request.protocol, self.original_request)
         ## @TODO pass a callback down to the exchange -- if it gets a RST, we have to unregister
