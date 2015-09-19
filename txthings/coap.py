@@ -3,6 +3,7 @@ Created on 08-09-2012
 
 @author: Maciej Wasilak
 '''
+import sys
 import random
 import copy
 import struct
@@ -11,7 +12,7 @@ from itertools import chain
 
 from twisted.internet import protocol, defer, reactor
 from twisted.python import log, failure
-import error
+import txthings.error as error
 
 from ipaddress import ip_address
 
@@ -392,6 +393,13 @@ class Message(object):
             response.opt.block1 = (self.opt.block1.block_number, True, self.opt.block1.size_exponent)
         return response
 
+    def debugString(self):
+        """Generate pretty string with message contents for debugging purposes"""
+        output = []
+        output.append("v:%d " % self.version)
+        output.append("t:%s " % types[self.mtype])
+        output.append("tkl:%d " % len(self.token))
+        output.append("")
 
 class Options(object):
     """Represent CoAP Header Options."""
@@ -403,9 +411,9 @@ class Options(object):
         option_number = 0
 
         while len(rawdata) > 0:
-            if ord(rawdata[0]) == 0xFF:
+            dllen = struct.unpack('!B', rawdata[:1])[0]
+            if dllen == 0xFF:
                 return rawdata[1:]
-            dllen = ord(rawdata[0])
             delta = (dllen & 0xF0) >> 4
             length = (dllen & 0x0F)
             rawdata = rawdata[1:]
@@ -612,7 +620,7 @@ def readExtendedFieldValue(value, rawdata):
     if value >= 0 and value < 13:
         return (value, rawdata)
     elif value == 13:
-        return (ord(rawdata[0]) + 13, rawdata[1:])
+        return (struct.unpack('!B', rawdata[:1])[0] + 13, rawdata[1:])
     elif value == 14:
         return (struct.unpack('!H', rawdata[:2])[0] + 269, rawdata[2:])
     else:
@@ -773,7 +781,8 @@ class Coap(protocol.DatagramProtocol):
         self.incoming_requests = {}  # unfinished incoming requests (identified by URL path and remote)
         self.observations = {} # outgoing observations. (token, remote) -> callback
 
-    def datagramReceived(self, data, (host, port)):
+    def datagramReceived(self, data, remote):
+        host, port = remote
         log.msg("Received %r from %s:%d" % (data, host, port))
         message = Message.decode(data, (ip_address(host), port), self)
         if self.deduplicateMessage(message) is True:
