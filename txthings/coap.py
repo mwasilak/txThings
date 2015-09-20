@@ -802,12 +802,26 @@ class Coap(protocol.DatagramProtocol):
                 ack.remote = response.remote
                 self.sendMessage(ack)
         elif (response.token, response.remote) in self.observations:
-            ## @TODO: deduplication based on observe option value, collecting
-            # the rest of the resource if blockwise
-            callback, args, kw = self.observations[(response.token, response.remote)]
+            ## @TODO: deduplication based on observe option value
+            callback_tuple, original_request_uri_path = self.observations[(response.token, response.remote)]
+            callback, args, kw = callback_tuple
             args = args or ()
             kw = kw or {}
-            callback(response, *args, **kw)
+
+            block2 = response.opt.block2
+            if block2.more is True and block2.block_number == 0:
+
+                request = Message(code=GET)
+                request.opt.uri_path = original_request_uri_path
+                request.remote = response.remote
+                request = request.generateNextBlock2Request(response)
+                requester = Requester(response.protocol, request, None, None, None,
+                             None, None, None,
+                             None, None, None)
+
+                requester.assembled_response = response
+                d = requester.deferred
+                d.addCallback( callback, *args, **kw)
 
             if response.mtype is CON:
                 #TODO: Some variation of sendEmptyACK should be used (as above)
@@ -995,16 +1009,16 @@ class Requester(object):
             self.protocol.outgoing_requests[(request.token, request.remote)] = self
             log.msg("Sending request - Token: %s, Host: %s, Port: %s" % (request.token.encode('hex'), request.remote[0], request.remote[1]))
             if request.opt.observe is not None and self.cbs[0][0] is not None:
-                d.addCallback(self.registerObservation, self.cbs[0])
+                d.addCallback(self.registerObservation, self.cbs[0], request.opt.uri_path)
             return d
 
     def handleResponse(self, response):
         d, self.deferred = self.deferred, None
         d.callback(response)
 
-    def registerObservation(self, response, callback):
+    def registerObservation(self, response, callback, request_uri_path):
         if response.opt.observe is not None:
-            self.protocol.observations[(response.token, response.remote)] = callback
+            self.protocol.observations[(response.token, response.remote)] = (callback, request_uri_path)
         return response
 
     def processBlock1InResponse(self, response):
