@@ -790,6 +790,13 @@ class Coap(protocol.DatagramProtocol):
            and sender (remote), as message received within last
            EXCHANGE_LIFETIME seconds (usually 247 seconds)."""
 
+        def addMessageToRecent(cache, key):
+            expiration = reactor.callLater(EXCHANGE_LIFETIME, removeMessageFromRecent, cache, key)
+            cache[key] = (message, expiration)
+
+        def removeMessageFromRecent(cache, key):
+            cache.pop(key)
+
         key = (message.mid, message.remote)
         log.msg("Incoming Message ID: %d" % message.mid)
         if message.mtype in (CON, NON):
@@ -805,8 +812,7 @@ class Coap(protocol.DatagramProtocol):
                 return True
             else:
                 log.msg('New unique CON or NON message received')
-                expiration = reactor.callLater(EXCHANGE_LIFETIME, self.removeMessageFromRecent, self.recent_remote_ids, key)
-                self.recent_remote_ids[key] = (message, expiration)
+                addMessageToRecent(self.recent_remote_ids, key)
                 return False
         else:
             if key in self.recent_local_ids:
@@ -814,17 +820,24 @@ class Coap(protocol.DatagramProtocol):
                 return True
             else:
                 log.msg('New unique ACK or RST message received')
-                expiration = reactor.callLater(EXCHANGE_LIFETIME, self.removeMessageFromRecent,self.recent_local_ids , key)
-                self.recent_local_ids[key] = (message, expiration)
+                addMessageToRecent(self.recent_local_ids, key)
                 return False
-
-    def removeMessageFromRecent(self, cache, key):
-        """Remove Message ID+Remote combination from
-           recent messages cache."""
-        cache.pop(key)
 
     def processResponse(self, response):
         """Method used for incoming response processing."""
+
+        def resetUnrecognized():
+            log.msg("Response not recognized - sending RST.")
+            rst = Message(mtype=RST, mid=response.mid, code=EMPTY, payload='')
+            rst.remote = response.remote
+            self.sendMessage(rst)
+        
+        def ackIfConfirmable():
+            if response.mtype is CON:
+                ack = Message(mtype=ACK, mid=response.mid, code=EMPTY, payload="")
+                ack.remote = response.remote
+                self.sendMessage(ack)
+
         if response.mtype is RST:
             return
         if response.mtype is ACK:
@@ -835,11 +848,8 @@ class Coap(protocol.DatagramProtocol):
         log.msg("Received Response, token: %s, host: %s, port: %s" % (response.token.encode('hex'), response.remote[0], response.remote[1]))
         if (response.token, response.remote) in self.outgoing_requests:
             self.outgoing_requests.pop((response.token, response.remote)).handleResponse(response)
-            if response.mtype is CON:
-                #TODO: Some variation of sendEmptyACK should be used
-                ack = Message(mtype=ACK, mid=response.mid, code=EMPTY, payload="")
-                ack.remote = response.remote
-                self.sendMessage(ack)
+            ackIfConfirmable()
+
         elif (response.token, response.remote) in self.observations:
             ## @TODO: deduplication based on observe option value
             callback_tuple, original_request_uri_path = self.observations[(response.token, response.remote)]
@@ -848,33 +858,33 @@ class Coap(protocol.DatagramProtocol):
             kw = kw or {}
 
             block2 = response.opt.block2
-            if block2.more is True and block2.block_number == 0:
+            if block2 is None:
+                ackIfConfirmable()
+                callback(response, *args, **kw)
+            elif block2.block_number == 0:
+                ackIfConfirmable()
+                if block2.more is False:
+                    callback(response, *args, **kw)
+                else:
+                    request = Message(code=GET)
+                    request.opt.uri_path = original_request_uri_path
+                    request.remote = response.remote
+                    request = request.generateNextBlock2Request(response)
+                    requester = Requester(response.protocol, request, None, None, None,
+                                          None, None, None,
+                                          None, None, None)
 
-                request = Message(code=GET)
-                request.opt.uri_path = original_request_uri_path
-                request.remote = response.remote
-                request = request.generateNextBlock2Request(response)
-                requester = Requester(response.protocol, request, None, None, None,
-                             None, None, None,
-                             None, None, None)
-
-                requester.assembled_response = response
-                d = requester.deferred
-                d.addCallback( callback, *args, **kw)
-
-            if response.mtype is CON:
-                #TODO: Some variation of sendEmptyACK should be used (as above)
-                ack = Message(mtype=ACK, mid=response.mid, code=EMPTY, payload="")
-                ack.remote = response.remote
-                self.sendMessage(ack)
+                    requester.assembled_response = response
+                    d = requester.deferred
+                    d.addCallback( callback, *args, **kw)
+            else:
+                resetUnrecognized()
 
             if response.opt.observe is None:
                 del self.observations[(response.token, response.remote)]
         else:
-            log.msg("Response not recognized - sending RST.")
-            rst = Message(mtype=RST, mid=response.mid, code=EMPTY, payload='')
-            rst.remote = response.remote
-            self.sendMessage(rst)
+            resetUnrecognized()
+
 
     def processRequest(self, request):
         """Method used for incoming request processing."""
