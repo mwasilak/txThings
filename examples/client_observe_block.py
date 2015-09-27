@@ -29,10 +29,10 @@ class Agent():
 
     def requestResource(self):
         request = coap.Message(code=coap.GET)
-        #Send request to "coap://iot.eclipse.org:5683/obs"
+        #Send request to "coap://iot.eclipse.org:5683/obs-large"
         request.opt.uri_path = ('obs-large',)
         request.opt.observe = 0
-        request.remote = ('129.132.15.80', coap.COAP_PORT)
+        request.remote = ('198.41.30.241', coap.COAP_PORT)
         d = protocol.request(request, observeCallback=self.printLaterResponse, 
                              observeCallbackArgs=('*** OBSERVE NOTIFICATION BEGIN ***',),
                              observeCallbackKeywords={'footer':'*** OBSERVE NOTIFICATION END ***'})
