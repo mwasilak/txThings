@@ -410,7 +410,7 @@ class Options(object):
             (delta, rawdata) = readExtendedFieldValue(delta, rawdata)
             (length, rawdata) = readExtendedFieldValue(length, rawdata)
             option_number += delta
-            option = option_formats.get(option_number, StringOption)(option_number)
+            option = option_formats.get(option_number, OpaqueOption)(option_number)
             option.decode(rawdata[:length])
             self.addOption(option)
             rawdata = rawdata[length:]
@@ -534,7 +534,7 @@ class Options(object):
         """Convenience setter: ETag option"""
         self.deleteOption(number=ETAG)
         if etag is not None:
-            self.addOption(StringOption(number=ETAG, value=etag))
+            self.addOption(OpaqueOption(number=ETAG, value=etag))
 
     def _getETag(self):
         """Convenience getter: ETag option"""
@@ -549,7 +549,7 @@ class Options(object):
     def _setETags(self, etags):
         self.deleteOption(number=ETAG)
         for tag in etags:
-            self.addOption(StringOption(number=ETAG, value=tag))
+            self.addOption(OpaqueOption(number=ETAG, value=tag))
 
     def _getETags(self):
         etag = self.getOption(number=ETAG)
@@ -632,8 +632,28 @@ def writeExtendedFieldValue(value):
         raise ValueError("Value out of range.")
 
 
+class OpaqueOption(object):
+    """Opaque CoAP option - used to represent opaque options.
+       This is a default option type."""
+
+    def __init__(self, number, value=""):
+        self.value = value
+        self.number = number
+
+    def encode(self):
+        rawdata = self.value
+        return rawdata
+
+    def decode(self, rawdata):
+        self.value = rawdata  # if rawdata is not None else ""
+
+    def _length(self):
+        return len(self.value)
+    length = property(_length)
+
+
 class StringOption(object):
-    """String CoAP option - used to represent string and opaque options."""
+    """String CoAP option - used to represent string options."""
 
     def __init__(self, number, value=""):
         self.value = value
@@ -702,14 +722,22 @@ class BlockOption(object):
         return ((self.value[0].bit_length() + 3) / 8 + 1)
     length = property(_length)
 
-option_formats = {6: UintOption,
-                  7: UintOption,
+option_formats = {3:  StringOption,
+                  6:  UintOption,
+                  7:  UintOption,
+                  8:  StringOption,
+                  11: StringOption,
                   12: UintOption,
                   14: UintOption,
+                  15: StringOption,
                   16: UintOption,
+                  20: StringOption,
                   23: BlockOption,
                   27: BlockOption,
-                  28: UintOption}
+                  28: UintOption,
+                  35: StringOption,
+                  39: StringOption,
+                  60: UintOption}
 """Dictionary used to assign option type to option numbers."""
 
 
