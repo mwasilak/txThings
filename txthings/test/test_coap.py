@@ -1,7 +1,7 @@
 '''
 Created on 16-10-2012
 
-@author: Maciek
+@author: Maciej Wasilak
 '''
 from twisted.trial import unittest
 from txthings import coap
