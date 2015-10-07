@@ -1,11 +1,10 @@
 '''
 Created on 16-10-2012
 
-@author: Maciek
+@author: Maciej Wasilak
 '''
 from twisted.trial import unittest
-import iot.coap as coap
-import struct
+from txthings import coap
 
 class TestMessage(unittest.TestCase):
     

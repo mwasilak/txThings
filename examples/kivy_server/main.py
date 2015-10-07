@@ -19,8 +19,8 @@ from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.python import log
 
-import iot.resource as resource
-import iot.coap as coap
+import txthings.resource as resource
+import txthings.coap as coap
 
 
 class MOTDResource (resource.CoAPResource):
@@ -72,7 +72,7 @@ class CoreResource(resource.CoAPResource):
         data = []
         self.root.generateResourceList(data, "")
         payload = ",".join(data)
-        print payload
+        log.msg("%s" % payload)
         response = coap.Message(code=coap.CONTENT, payload=payload)
         response.opt.content_format = 40
         return defer.succeed(response)

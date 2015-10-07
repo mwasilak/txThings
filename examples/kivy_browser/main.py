@@ -40,12 +40,13 @@ install_twisted_reactor()
 from twisted.internet import reactor, defer, threads, task
 from twisted.python import log
 
-import iot.coap as coap
-import iot.resource as resource
-import iot.error as error
+import txthings.coap as coap
+import txthings.resource as resource
+import txthings.error as error
+import txthings.ext.link_header
 from widgets.browsingcard import BrowsingCard as BrowsingCard
 
-import link_header
+
 
 #Netloc parser assembled from various bits on stack overflow and regexlib
 NETLOC_RE = re.compile(r'''^
@@ -311,9 +312,14 @@ class MainScreen(Screen):
                 formatted_options += coap.options[option.number]
             else:
                 formatted_options += "Unknown"
-            formatted_options += " (" + str(option.number) + ")"
+            formatted_options += " (%d)" % option.number
             if option.value is not None:
-                formatted_options += " : " + str(option.value)
+                if isinstance(option, coap.OpaqueOption):
+                    formatted_options += " : 0x%s" % option.value.encode('hex')
+                elif isinstance(option, coap.BlockOption):
+                    formatted_options += " : number = %d, more = %r, size exp = %d" % (option.value.block_number, option.value.more, option.value.size_exponent)
+                else:
+                    formatted_options += " : " + str(option.value)
         card.response_payload.text += formatted_options
         card.response_payload.text += '\n\n[b]Response:[/b] ' + card.response.payload
 
@@ -539,7 +545,7 @@ class CoapBrowserApp(App):
         sm = ScreenManager(transition=SlideTransition())
         sm.add_widget(MainScreen(name='controller', protocol=self.protocol, screen_manager=sm))
         sm.add_widget(NodesScreen(name='nodes', screen_manager=sm))
-        print self.get_application_config()
+        log.msg("%s" % self.get_application_config())
         return sm
 
     def create_protocol(self):
