@@ -266,7 +266,7 @@ media_types_rev = {v:k for k, v in media_types.items()}
 class Message(object):
     """A CoAP Message."""
 
-    def __init__(self, mtype=None, mid=None, code=EMPTY, payload='', token=''):
+    def __init__(self, mtype=None, mid=None, code=EMPTY, payload=b'', token=b''):
         self.version = 1
         self.mtype = mtype
         self.mid = mid
@@ -368,7 +368,7 @@ class Message(object):
            This method is used by client after receiving
            blockwise response from server with "more" flag set."""
         request = copy.deepcopy(self)
-        request.payload = ""
+        request.payload = b""
         request.mid = None
         if response.opt.block2.block_number == 0 and response.opt.block2.size_exponent > DEFAULT_BLOCK_SIZE_EXP:
             new_size_exponent = DEFAULT_BLOCK_SIZE_EXP
