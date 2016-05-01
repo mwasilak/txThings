@@ -13,6 +13,7 @@ from twisted.internet import protocol, defer, reactor
 from twisted.python import log, failure
 import error
 
+from ipaddress import ip_address
 
 COAP_PORT = 5683
 """The IANA-assigned standard port for COAP services."""
@@ -774,7 +775,7 @@ class Coap(protocol.DatagramProtocol):
 
     def datagramReceived(self, data, (host, port)):
         log.msg("Received %r from %s:%d" % (data, host, port))
-        message = Message.decode(data, (host, port), self)
+        message = Message.decode(data, (ip_address(host), port), self)
         if self.deduplicateMessage(message) is True:
             return
         if isRequest(message.code):
@@ -913,7 +914,9 @@ class Coap(protocol.DatagramProtocol):
     def sendMessage(self, message):
         """Set Message ID, encode and send message.
            Also if message is Confirmable (CON) add Exchange"""
-        host, port = message.remote
+        address, port = message.remote
+        host = str(address)
+        target = (host, port)
         log.msg("Sending message to %s:%d" % (host, port))
         recent_key = (message.mid, message.remote)
         if recent_key in self.recent_remote_ids:
@@ -923,7 +926,7 @@ class Coap(protocol.DatagramProtocol):
         if message.mid is None:
             message.mid = self.nextMessageID()
         msg = message.encode()
-        self.transport.write(msg, message.remote)
+        self.transport.write(msg, target)
         if message.mtype is CON:
             self.addExchange(message)
         log.msg("Message %r sent successfully" % msg)
@@ -964,7 +967,10 @@ class Coap(protocol.DatagramProtocol):
         """Retransmit CON message that has not been ACKed or RSTed."""
         self.active_exchanges.pop(message.mid)
         if retransmission_counter < MAX_RETRANSMIT:
-            self.transport.write(message.encode(), message.remote)
+            address, port = message.remote
+            host = str(address)
+            target = (host, port)
+            self.transport.write(message.encode(), target)
             retransmission_counter += 1
             timeout *= 2
             next_retransmission = reactor.callLater(timeout, self.retransmit, message, timeout, retransmission_counter)
@@ -1057,7 +1063,7 @@ class Requester(object):
             timeout = reactor.callLater(REQUEST_TIMEOUT, timeoutRequest, d)
             d.addBoth(gotResult)
             self.protocol.outgoing_requests[(request.token, request.remote)] = self
-            log.msg("Sending request - Token: %s, Host: %s, Port: %s" % (request.token.encode('hex'), request.remote[0], request.remote[1]))
+            log.msg("Sending request - Token: %s, Host: %s, Port: %s" % (request.token.encode('hex'), str(request.remote[0]), request.remote[1]))
             if request.opt.observe is not None and self.cbs[0][0] is not None:
                 d.addCallback(self.registerObservation, self.cbs[0], request.opt.uri_path)
             return d

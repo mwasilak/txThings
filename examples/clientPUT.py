@@ -14,6 +14,7 @@ from twisted.python import log
 import txthings.coap as coap
 import txthings.resource as resource
 
+from ipaddress import ip_address
 
 class Agent():
     """
@@ -34,7 +35,7 @@ class Agent():
         request = coap.Message(code=coap.PUT, payload=payload)
         request.opt.uri_path = ("large-update",)
         request.opt.content_format = coap.media_types_rev['text/plain']
-        request.remote = ('198.41.30.241', coap.COAP_PORT)
+        request.remote = (ip_address('198.41.30.241'), coap.COAP_PORT)
         d = protocol.request(request)
         d.addCallback(self.printResponse)
 

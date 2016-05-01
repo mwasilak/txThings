@@ -14,11 +14,12 @@ from twisted.python import log
 import txthings.coap as coap
 import txthings.resource as resource
 
+from ipaddress import ip_address
 
 class Agent():
     """
-    Example class which performs single GET request to iot.eclipse.org
-    port 5683 (official IANA assigned CoAP port), URI "obs".
+    Example class which performs single GET request to coap.me
+    port 5683 (official IANA assigned CoAP port), URI "test".
     Request is sent 1 second after initialization.
     
     Remote IP address is hardcoded - no DNS lookup is preformed.
@@ -39,10 +40,10 @@ class Agent():
 
     def requestResource(self):
         request = coap.Message(code=coap.GET)
-        #Send request to "coap://iot.eclipse.org:5683/obs"
-        request.opt.uri_path = ('obs',)
+        #Send request to "coap://coap.me:5683/test"
+        request.opt.uri_path = ('test',)
         request.opt.observe = 0
-        request.remote = ("198.41.30.241", coap.COAP_PORT)
+        request.remote = (ip_address("134.102.218.18"), coap.COAP_PORT)
         d = protocol.request(request, observeCallback=self.printLaterResponse)
         d.addCallback(self.printResponse)
         d.addErrback(self.noResponse)
@@ -65,5 +66,5 @@ endpoint = resource.Endpoint(None)
 protocol = coap.Coap(endpoint)
 client = Agent(protocol)
 
-reactor.listenUDP(61616, protocol)
+reactor.listenUDP(61616, protocol)#, interface="::")
 reactor.run()

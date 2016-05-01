@@ -14,6 +14,7 @@ from twisted.python import log
 import txthings.coap as coap
 import txthings.resource as resource
 
+from ipaddress import ip_address
 
 class Agent():
     """
@@ -32,7 +33,7 @@ class Agent():
         #Send request to "coap://iot.eclipse.org:5683/obs-large"
         request.opt.uri_path = ('obs-large',)
         request.opt.observe = 0
-        request.remote = ('198.41.30.241', coap.COAP_PORT)
+        request.remote = (ip_address('198.41.30.241'), coap.COAP_PORT)
         d = protocol.request(request, observeCallback=self.printLaterResponse, 
                              observeCallbackArgs=('*** OBSERVE NOTIFICATION BEGIN ***',),
                              observeCallbackKeywords={'footer':'*** OBSERVE NOTIFICATION END ***'})

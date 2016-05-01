@@ -46,7 +46,7 @@ import txthings.error as error
 import txthings.ext.link_header
 from widgets.browsingcard import BrowsingCard as BrowsingCard
 
-
+from ipaddress import ip_address
 
 #Netloc parser assembled from various bits on stack overflow and regexlib
 NETLOC_RE = re.compile(r'''^
@@ -276,7 +276,7 @@ class MainScreen(Screen):
                 request_copy = copy.deepcopy(request)
                 if scheme != "coap":
                     card.response_payload.text += 'Error: URI scheme should be "coap"'
-                request_copy.remote = (host, port)
+                request_copy.remote = (ip_address(host), port)
                 if path != "" and path != "/":
                     path = path.lstrip("/")
                     request_copy.opt.uri_path = path.split("/")
