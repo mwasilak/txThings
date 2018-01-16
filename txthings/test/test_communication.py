@@ -61,7 +61,7 @@ class TestGetRemoteResource(unittest.TestCase):
         
     def test_exchange(self):
         request = coap.Message(code=coap.GET)
-        request.opt.uri_path = ('text',)
+        request.opt.uri_path = (b'text',)
         request.remote = (SERVER_ADDRESS, SERVER_PORT)
         d = self.client_protocol.request(request)
         d.addCallback(self.evaluateResponse)
