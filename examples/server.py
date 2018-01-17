@@ -59,7 +59,7 @@ class BlockResource (resource.CoAPResource):
         return defer.succeed(response)
 
     def render_PUT(self, request):
-        print 'PUT payload: ' + request.payload
+        log.msg('PUT payload: %s', request.payload)
         payload = "Mr. and Mrs. Dursley of number four, Privet Drive, were proud to say that they were perfectly normal, thank you very much."
         response = coap.Message(code=coap.CHANGED, payload=payload)
         return defer.succeed(response)
@@ -139,7 +139,7 @@ class CoreResource(resource.CoAPResource):
         data = []
         self.root.generateResourceList(data, "")
         payload = ",".join(data)
-        print payload
+        log.msg("%s", payload)
         response = coap.Message(code=coap.CONTENT, payload=payload)
         response.opt.content_format = coap.media_types_rev['application/link-format']
         return defer.succeed(response)

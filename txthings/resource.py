@@ -7,12 +7,11 @@ Implementation of the lowest-level Resource class.
 """
 
 import copy
-import warnings
 
-from zope.interface import Attribute, implements, Interface
+from zope.interface import implementer
 
-import error
-import coap
+import txthings.error as error
+import txthings.coap as coap
 from itertools import chain
 from twisted.python import log
 from twisted.python.reflect import prefixedMethodNames
@@ -29,14 +28,12 @@ def getChildForRequest(resource, request):
         resource = resource.getChildWithDefault(pathElement, request)
     return resource
 
-
+@implementer(IResource)
 class CoAPResource:
     """
     CoAP-accessible resource.
 
     """
-
-    implements(IResource)
 
     #entityType = IResource
 

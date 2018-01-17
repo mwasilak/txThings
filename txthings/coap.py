@@ -3,17 +3,21 @@ Created on 08-09-2012
 
 @author: Maciej Wasilak
 '''
-import random
-import copy
-import struct
-import collections
 from itertools import chain
+import codecs
+import collections
+import copy
+import random
+import struct
+import sys
 
 from twisted.internet import protocol, defer, reactor
 from twisted.python import log, failure
-import error
+import txthings.error as error
 
 from ipaddress import ip_address
+
+import six
 
 COAP_PORT = 5683
 """The IANA-assigned standard port for COAP services."""
@@ -265,7 +269,7 @@ media_types_rev = {v:k for k, v in media_types.items()}
 class Message(object):
     """A CoAP Message."""
 
-    def __init__(self, mtype=None, mid=None, code=EMPTY, payload='', token=''):
+    def __init__(self, mtype=None, mid=None, code=EMPTY, payload=b'', token=b''):
         self.version = 1
         self.mtype = mtype
         self.mid = mid
@@ -302,12 +306,12 @@ class Message(object):
         """Create binary representation of message from Message object."""
         if self.mtype is None or self.mid is None:
             raise TypeError("Fatal Error: Message Type and Message ID must not be None.")
-        rawdata = chr((self.version << 6) + ((self.mtype & 0x03) << 4) + (len(self.token) & 0x0F))
+        rawdata = six.int2byte((self.version << 6) + ((self.mtype & 0x03) << 4) + (len(self.token) & 0x0F))
         rawdata += struct.pack('!BH', self.code, self.mid)
         rawdata += self.token
         rawdata += self.opt.encode()
         if len(self.payload) > 0:
-            rawdata += chr(0xFF)
+            rawdata += six.int2byte(0xFF)
             rawdata += self.payload
         return rawdata
 
@@ -367,7 +371,7 @@ class Message(object):
            This method is used by client after receiving
            blockwise response from server with "more" flag set."""
         request = copy.deepcopy(self)
-        request.payload = ""
+        request.payload = b""
         request.mid = None
         if response.opt.block2.block_number == 0 and response.opt.block2.size_exponent > DEFAULT_BLOCK_SIZE_EXP:
             new_size_exponent = DEFAULT_BLOCK_SIZE_EXP
@@ -392,6 +396,13 @@ class Message(object):
             response.opt.block1 = (self.opt.block1.block_number, True, self.opt.block1.size_exponent)
         return response
 
+    def debugString(self):
+        """Generate pretty string with message contents for debugging purposes"""
+        output = []
+        output.append("v:%d " % self.version)
+        output.append("t:%s " % types[self.mtype])
+        output.append("tkl:%d " % len(self.token))
+        output.append("")
 
 class Options(object):
     """Represent CoAP Header Options."""
@@ -403,9 +414,9 @@ class Options(object):
         option_number = 0
 
         while len(rawdata) > 0:
-            if ord(rawdata[0]) == 0xFF:
+            dllen = struct.unpack('!B', rawdata[:1])[0]
+            if dllen == 0xFF:
                 return rawdata[1:]
-            dllen = ord(rawdata[0])
             delta = (dllen & 0xF0) >> 4
             length = (dllen & 0x0F)
             rawdata = rawdata[1:]
@@ -426,12 +437,12 @@ class Options(object):
         for option in option_list:
             delta, extended_delta = writeExtendedFieldValue(option.number - current_opt_num)
             length, extended_length = writeExtendedFieldValue(option.length)
-            data.append(chr(((delta & 0x0F) << 4) + (length & 0x0F)))
+            data.append(six.int2byte((((int(delta) & 0x0F) << 4) + (int(length) & 0x0F))))
             data.append(extended_delta)
             data.append(extended_length)
             data.append(option.encode())
             current_opt_num = option.number
-        return (''.join(data))
+        return b"".join(data)
 
     def addOption(self, option):
         """Add option into option header."""
@@ -451,11 +462,11 @@ class Options(object):
 
     def _setUriPath(self, segments):
         """Convenience setter: Uri-Path option"""
-        if isinstance(segments, basestring): #For Python >3.1 replace with isinstance(segments,str)
+        if isinstance(segments, six.binary_type):
             raise ValueError("URI Path should be passed as a list or tuple of segments")
         self.deleteOption(number=URI_PATH)
         for segment in segments:
-            self.addOption(StringOption(number=URI_PATH, value=str(segment)))
+            self.addOption(StringOption(number=URI_PATH, value=six.binary_type(segment)))
 
     def _getUriPath(self):
         """Convenience getter: Uri-Path option"""
@@ -470,11 +481,11 @@ class Options(object):
 
     def _setUriQuery(self, segments):
         """Convenience setter: Uri-Query option"""
-        if isinstance(segments, basestring): #For Python >3.1 replace with isinstance(segments,str)
+        if isinstance(segments, six.binary_type):
             raise ValueError("URI Query should be passed as a list or tuple of segments")
         self.deleteOption(number=URI_QUERY)
         for segment in segments:
-            self.addOption(StringOption(number=URI_QUERY, value=str(segment)))
+            self.addOption(StringOption(number=URI_QUERY, value=six.binary_type(segment)))
 
     def _getUriQuery(self):
         """Convenience getter: Uri-Query option"""
@@ -589,11 +600,11 @@ class Options(object):
 
     def _setLocationPath(self, segments):
         """Convenience setter: Location-Path option"""
-        if isinstance(segments, basestring): #For Python >3.1 replace with isinstance(segments,str)
+        if isinstance(segments, six.binary_type):
             raise ValueError("Location Path should be passed as a list or tuple of segments")
         self.deleteOption(number=LOCATION_PATH)
         for segment in segments:
-            self.addOption(StringOption(number=LOCATION_PATH, value=str(segment)))
+            self.addOption(StringOption(number=LOCATION_PATH, value=six.binary_type(segment)))
 
     def _getLocationPath(self):
         """Convenience getter: Location-Path option"""
@@ -612,7 +623,7 @@ def readExtendedFieldValue(value, rawdata):
     if value >= 0 and value < 13:
         return (value, rawdata)
     elif value == 13:
-        return (ord(rawdata[0]) + 13, rawdata[1:])
+        return (struct.unpack('!B', rawdata[:1])[0] + 13, rawdata[1:])
     elif value == 14:
         return (struct.unpack('!H', rawdata[:2])[0] + 269, rawdata[2:])
     else:
@@ -625,7 +636,7 @@ def writeExtendedFieldValue(value):
        In CoAP option delta and length can be represented by a variable
        number of bytes depending on the value."""
     if value >= 0 and value < 13:
-        return (value, '')
+        return (value, b'')
     elif value >= 13 and value < 269:
         return (13, struct.pack('!B', value - 13))
     elif value >= 269 and value < 65804:
@@ -681,13 +692,13 @@ class UintOption(object):
         self.number = number
 
     def encode(self):
-        rawdata = struct.pack("!L", self.value)  # For Python >3.1 replace with int.to_bytes()
-        return rawdata.lstrip(chr(0))
+        rawdata = struct.pack("!L", self.value)
+        return rawdata.lstrip(six.int2byte(0))
 
-    def decode(self, rawdata):  # For Python >3.1 replace with int.from_bytes()
+    def decode(self, rawdata):
         value = 0
-        for byte in rawdata:
-            value = (value * 256) + ord(byte)
+        for byte in six.iterbytes(rawdata):
+            value = (value * 256) + byte
         self.value = value
         return self
 
@@ -711,13 +722,13 @@ class BlockOption(object):
 
     def encode(self):
         as_integer = (self.value[0] << 4) + (self.value[1] * 0x08) + self.value[2]
-        rawdata = struct.pack("!L", as_integer)  # For Python >3.1 replace with int.to_bytes()
-        return rawdata.lstrip(chr(0))
+        rawdata = struct.pack("!L", as_integer)
+        return rawdata.lstrip(six.int2byte(0))
 
     def decode(self, rawdata):
         as_integer = 0
-        for byte in rawdata:
-            as_integer = (as_integer * 256) + ord(byte)
+        for byte in six.iterbytes(rawdata):
+            as_integer = (as_integer * 256) + byte
         self.value = self.BlockwiseTuple(block_number=(as_integer >> 4), more=bool(as_integer & 0x08), size_exponent=(as_integer & 0x07))
 
     def _length(self):
@@ -756,7 +767,7 @@ def isSuccessful(code):
 
 
 def uriPathAsString(segment_list):
-    return '/' + '/'.join(segment_list)
+    return b'/' + b'/'.join(segment_list)
 
 
 class Coap(protocol.DatagramProtocol):
@@ -773,7 +784,8 @@ class Coap(protocol.DatagramProtocol):
         self.incoming_requests = {}  # unfinished incoming requests (identified by URL path and remote)
         self.observations = {} # outgoing observations. (token, remote) -> callback
 
-    def datagramReceived(self, data, (host, port)):
+    def datagramReceived(self, data, remote):
+        host, port = remote
         log.msg("Received %r from %s:%d" % (data, host, port))
         message = Message.decode(data, (ip_address(host), port), self)
         if self.deduplicateMessage(message) is True:
@@ -847,7 +859,7 @@ class Coap(protocol.DatagramProtocol):
                 self.removeExchange(response)
             else:
                 return
-        log.msg("Received Response, token: %s, host: %s, port: %s" % (response.token.encode('hex'), response.remote[0], response.remote[1]))
+        log.msg("Received Response, token: %s, host: %s, port: %s" % (codecs.encode(response.token, 'hex'), response.remote[0], response.remote[1]))
         if (response.token, response.remote) in self.outgoing_requests:
             self.outgoing_requests.pop((response.token, response.remote)).handleResponse(response)
             ackIfConfirmable()
@@ -942,7 +954,7 @@ class Coap(protocol.DatagramProtocol):
         #TODO: add proper Token handling
         token = self.token
         self.token = (self.token + 1) & 0xffffffffffffffff
-        return ("%08x"%self.token).decode('hex')
+        return codecs.decode((b"%08x" % self.token), "hex")
 
     def addExchange(self, message):
         """Add an "exchange" for outgoing CON message.
@@ -1063,7 +1075,7 @@ class Requester(object):
             timeout = reactor.callLater(REQUEST_TIMEOUT, timeoutRequest, d)
             d.addBoth(gotResult)
             self.protocol.outgoing_requests[(request.token, request.remote)] = self
-            log.msg("Sending request - Token: %s, Host: %s, Port: %s" % (request.token.encode('hex'), str(request.remote[0]), request.remote[1]))
+            log.msg("Sending request - Token: %s, Host: %s, Port: %s" % (codecs.encode(request.token, 'hex'), str(request.remote[0]), request.remote[1]))
             if request.opt.observe is not None and self.cbs[0][0] is not None:
                 d.addCallback(self.registerObservation, self.cbs[0], request.opt.uri_path)
             return d
@@ -1096,6 +1108,8 @@ class Requester(object):
                 else:
                     next_block = self.app_request.extractBlock(self.app_request.opt.block1.block_number + 1, block1.size_exponent)
                 if next_block is not None:
+                    if block1.more is False:
+                        return defer.fail()
                     self.app_request.opt.block1 = next_block.opt.block1
                     block1Callback, args, kw = self.cbs[1]
                     if block1Callback is None:
@@ -1213,7 +1227,7 @@ class Responder(object):
                 try:
                     self.assembled_request.appendRequestBlock(request)
                 except (error.NotImplemented, AttributeError):
-                    self.respondWithError(request, NOT_IMPLEMENTED, "Error: Request block received out of order!")
+                    self.respondWithError(request, NOT_IMPLEMENTED, b"Error: Request block received out of order!")
                     return defer.fail(error.NotImplemented())
                     #raise error.NotImplemented
             if block1.more is True:
@@ -1248,11 +1262,11 @@ class Responder(object):
             resource = self.protocol.endpoint.getResourceFor(request)
             d = resource.render(request)
         except error.NoResource:
-            self.respondWithError(request, NOT_FOUND, "Error: Resource not found!")
+            self.respondWithError(request, NOT_FOUND, b"Error: Resource not found!")
         except error.UnallowedMethod:
-            self.respondWithError(request, METHOD_NOT_ALLOWED, "Error: Method not allowed!")
+            self.respondWithError(request, METHOD_NOT_ALLOWED, b"Error: Method not allowed!")
         except error.UnsupportedMethod:
-            self.respondWithError(request, METHOD_NOT_ALLOWED, "Error: Method not recognized!")
+            self.respondWithError(request, METHOD_NOT_ALLOWED, b"Error: Method not recognized!")
         else:
             delayed_ack = reactor.callLater(EMPTY_ACK_DELAY, self.sendEmptyAck, request)
             if resource.observable and request.code == GET and request.opt.observe is not None:
@@ -1405,7 +1419,7 @@ class Responder(object):
         #if isResponse(response.code) is False:
             #raise ValueError("Message code is not valid for a response.")
         response.token = request.token
-        log.msg("Token: %s" % ":".join("{:02x}".format(ord(c)) for c in response.token))
+        log.msg("Token: %s" % ":".join(("{:02x}".format(c) for c in six.iterbytes(response.token))))
         response.remote = request.remote
         if request.opt.block1 is not None:
             response.opt.block1 = request.opt.block1
