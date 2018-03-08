@@ -1133,7 +1133,9 @@ class Requester(object):
                     next_block = self.app_request.extractBlock(self.app_request.opt.block1.block_number + 1, block1.size_exponent)
                 if next_block is not None:
                     if block1.more is False:
-                        return defer.fail()
+                        if response.code not in (CREATED, DELETED, VALID, CHANGED, CONTENT, CONTINUE):
+                            log.msg("Client returned non 2.xx response to intermediate block, code = %d." % (response.code))
+                            return defer.fail()
                     self.app_request.opt.block1 = next_block.opt.block1
                     block1Callback, args, kw = self.cbs[1]
                     if block1Callback is None:
