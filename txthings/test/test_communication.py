@@ -1,21 +1,25 @@
-'''
+"""
 Created on 04-10-2015
 
 @author: Maciej Wasilak
-'''
+"""
 from twisted.internet import defer, reactor
 from twisted.trial import unittest
-from twisted.test import proto_helpers
 from txthings import coap
 from txthings import resource
 
-SERVER_ADDRESS = "192.168.37.137"
+from ipaddress import ip_address
+
+from six import itervalues
+
+SERVER_ADDRESS = u"192.168.37.137"
 SERVER_PORT = 5683
 
-CLIENT_ADDRESS = "192.168.37.2"
+CLIENT_ADDRESS = u"192.168.37.2"
 CLIENT_PORT = 61616
 
-PAYLOAD = "123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 "
+PAYLOAD = b"123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 "
+
 
 class FakeTwoWayDatagramTransport:
 
@@ -35,8 +39,9 @@ class TextResource (resource.CoAPResource):
         self.text = PAYLOAD
 
     def render_GET(self, request):
-        response = coap.Message(code=coap.CONTENT, payload='%s' % (self.text,))
+        response = coap.Message(code=coap.CONTENT, payload=b'%s' % (self.text,))
         return defer.succeed(response)
+
 
 class TestGetRemoteResource(unittest.TestCase):
     """This is a very high-level test case which tests blockwise exchange between
@@ -46,7 +51,7 @@ class TestGetRemoteResource(unittest.TestCase):
         
         root = resource.CoAPResource()
         text = TextResource()
-        root.putChild('text', text)
+        root.putChild(b'text', text)
         server_endpoint = resource.Endpoint(root)
         self.server_protocol = coap.Coap(server_endpoint)
         
@@ -58,18 +63,18 @@ class TestGetRemoteResource(unittest.TestCase):
         
         self.client_protocol.transport = self.client_transport
         self.server_protocol.transport = self.server_transport
-        
+
     def test_exchange(self):
         request = coap.Message(code=coap.GET)
         request.opt.uri_path = (b'text',)
-        request.remote = (SERVER_ADDRESS, SERVER_PORT)
+        request.remote = (ip_address(SERVER_ADDRESS), SERVER_PORT)
         d = self.client_protocol.request(request)
         d.addCallback(self.evaluateResponse)
         return d
         
     def evaluateResponse(self, response):
-        for value in self.client_protocol.recent_local_ids.itervalues():
+        for value in itervalues(self.client_protocol.recent_local_ids):
             value[1].cancel()
-        for value in self.server_protocol.recent_remote_ids.itervalues():
+        for value in itervalues(self.server_protocol.recent_remote_ids):
             value[1].cancel()
         self.assertEqual(response.payload, PAYLOAD)

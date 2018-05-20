@@ -1,27 +1,25 @@
-'''
+"""
 Created on 08-09-2012
 
 @author: Maciej Wasilak
-'''
+"""
 
 import sys
+from ipaddress import ip_address
 
-from twisted.internet.defer import Deferred
-from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
 from twisted.python import log
 
 import txthings.coap as coap
 import txthings.resource as resource
 
-from ipaddress import ip_address
 
-class Agent():
+class Agent:
     """
     Example class which performs single GET request to coap.me
     port 5683 (official IANA assigned CoAP port), URI "test".
     Request is sent 1 second after initialization.
-    
+
     Remote IP address is hardcoded - no DNS lookup is preformed.
 
     Method requestResource constructs the request message to
@@ -40,8 +38,8 @@ class Agent():
 
     def requestResource(self):
         request = coap.Message(code=coap.GET)
-        #Send request to "coap://coap.me:5683/test"
-        request.opt.uri_path = ('test',)
+        # Send request to "coap://coap.me:5683/test"
+        request.opt.uri_path = (b'test',)
         request.opt.observe = 0
         request.remote = (ip_address("134.102.218.18"), coap.COAP_PORT)
         d = protocol.request(request, observeCallback=self.printLaterResponse)
@@ -49,16 +47,17 @@ class Agent():
         d.addErrback(self.noResponse)
 
     def printResponse(self, response):
-        print 'First result: ' + response.payload
-        #reactor.stop()
+        print('First result: ' + str(response.payload, 'utf-8'))
+        # reactor.stop()
 
     def printLaterResponse(self, response):
-        print 'Observe result: ' + response.payload
+        print('Observe result: ' + str(response.payload, 'utf-8'))
 
     def noResponse(self, failure):
-        print 'Failed to fetch resource:'
-        print failure
-        #reactor.stop()
+        print('Failed to fetch resource:')
+        print(failure)
+        # reactor.stop()
+
 
 log.startLogging(sys.stdout)
 
@@ -66,5 +65,5 @@ endpoint = resource.Endpoint(None)
 protocol = coap.Coap(endpoint)
 client = Agent(protocol)
 
-reactor.listenUDP(61616, protocol)#, interface="::")
+reactor.listenUDP(61616, protocol)  # , interface="::")
 reactor.run()
