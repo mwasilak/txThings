@@ -10,7 +10,7 @@ else:
     py2_ipa = [ 'py2-ipaddress>=3.4.1' ]
 
 setup(name='txThings',
-      version='0.2.0',
+      version='0.3.0',
       description='CoAP protocol implementation for Twisted Framework',
       author='Maciej Wasilak',
       author_email='wasilak@gmail.com',
