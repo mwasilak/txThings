@@ -403,6 +403,7 @@ class Message(object):
         output.append("t:%s " % types[self.mtype])
         output.append("tkl:%d " % len(self.token))
         output.append("")
+        return output
 
 class Options(object):
     """Represent CoAP Header Options."""
