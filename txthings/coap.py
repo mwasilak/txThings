@@ -327,8 +327,10 @@ class Message(object):
             more = True if end < len(self.payload) else False
             if isRequest(block.code):
                 block.opt.block1 = (number, more, size_exp)
+                block.opt.size1 = len(self.payload)
             else:
                 block.opt.block2 = (number, more, size_exp)
+                block.opt.size2 = len(self.payload)
             return block
 
     def appendRequestBlock(self, next_block):
@@ -528,6 +530,28 @@ class Options(object):
             return None
 
     block1 = property(_getBlock1, _setBlock1)
+
+    def _setSize1(self, size1):
+        """Convenience setter: Size1 option"""
+        self.deleteOption(number=SIZE1)
+        self.addOption(UintOption(number=SIZE1, value=size1))
+
+    def _getSize1(self):
+        """Convenience getter: Size1 option"""
+        return self.getOption(number=SIZE1)
+
+    size1 = property(_getSize1, _setSize1)
+
+    def _setSize2(self, size2):
+        """Convenience setter: Size2 option"""
+        self.deleteOption(number=SIZE2)
+        self.addOption(UintOption(number=SIZE2, value=size2))
+
+    def _getSize2(self):
+        """Convenience getter: Size2 option"""
+        return self.getOption(number=SIZE2)
+
+    size2 = property(_getSize2, _setSize2)
 
     def _setContentFormat(self, content_format):
         """Convenience setter: Content-Format option"""
@@ -1110,7 +1134,9 @@ class Requester(object):
                     next_block = self.app_request.extractBlock(self.app_request.opt.block1.block_number + 1, block1.size_exponent)
                 if next_block is not None:
                     if block1.more is False:
-                        return defer.fail()
+                        if response.code not in (CREATED, DELETED, VALID, CHANGED, CONTENT, CONTINUE):
+                            log.msg("Client returned non 2.xx response to intermediate block, code = %d." % (response.code))
+                            return defer.fail()
                     self.app_request.opt.block1 = next_block.opt.block1
                     block1Callback, args, kw = self.cbs[1]
                     if block1Callback is None:
